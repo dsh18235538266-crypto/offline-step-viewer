@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STEP Modeler — Live Viewer</title>
+<style>
+:root{--ink:#eaf2f8;--line:rgba(151,181,204,.16);--orange:#f28b38;--cyan:#4cc9f0}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#080d12;color:var(--ink)}
+body{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;background:radial-gradient(circle at 14% 0%,rgba(54,100,129,.18),transparent 32rem),linear-gradient(145deg,#0c131a,#080d12 52%,#0a1016)}
+button,input{font:inherit;color:inherit}
+.shell{min-height:100vh;padding:0 28px 28px}
+.top{height:84px;max-width:1540px;margin:auto;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:13px}
+.mark{color:var(--orange);font-size:22px}
+.brand small{display:block;color:#748695;font-size:10px;font-weight:800;letter-spacing:.2em}
+.brand h1{margin:3px 0 0;font-size:18px}
+.ok{color:#92a3af;font:600 11px ui-monospace,monospace}
+.ok:before{content:"";display:inline-block;width:7px;height:7px;margin-right:8px;border-radius:50%;background:#56d68b;box-shadow:0 0 12px #56d68b}
+.ok.off:before{background:#f2583e;box-shadow:0 0 12px #f2583e}
+.workspace{max-width:1540px;margin:22px auto 0;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;min-height:calc(100vh - 134px)}
+.viewer,.panel{border:1px solid var(--line);background:rgba(14,22,30,.85);box-shadow:0 20px 70px rgba(0,0,0,.28)}
+.viewer{min-height:680px;display:grid;grid-template-rows:1fr auto;overflow:hidden}
+.stage{min-height:590px;position:relative;overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.stage:after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 42%,transparent 0 34%,rgba(2,6,10,.2) 76%,rgba(2,5,8,.7))}
+.loading{position:absolute;inset:0;z-index:3;display:grid;place-content:center;gap:12px;text-align:center;background:#0b1118;color:#aebdca;font-size:12px}
+.loading[hidden]{display:none!important}
+.loading i{width:34px;height:34px;margin:0 auto;border:2px solid #2a3942;border-top-color:var(--orange);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toolbar{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:rgba(8,13,18,.6)}
+.toolbar button{padding:8px 14px;border:1px solid var(--line);background:transparent;border-radius:8px;cursor:pointer;font-size:12px;letter-spacing:.04em;transition:.15s}
+.toolbar button:hover{border-color:var(--cyan);color:var(--cyan)}
+.toolbar button.active{border-color:var(--orange);color:var(--orange)}
+.toolbar input[type=file]{display:none}
+.panel{padding:22px 24px}
+.panel h2{margin:0 0 6px;font-size:15px;font-weight:500}
+.panel .lede{color:#748695;font-size:13px;line-height:1.6;margin:0 0 18px}
+.specs{display:grid;gap:10px}
+.specs .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+.specs .row span:first-child{color:#748695}
+.specs .row span:last-child{font-family:ui-monospace,monospace;color:var(--cyan)}
+.hint{margin-top:22px;padding:12px 14px;border:1px dashed var(--line);border-radius:8px;font-size:11px;color:#748695;line-height:1.6}
+.hint b{color:var(--cyan)}
+.conn{position:absolute;top:14px;right:14px;z-index:4;padding:5px 11px;border-radius:20px;font:600 10px ui-monospace,monospace;letter-spacing:.05em}
+.conn.on{background:rgba(86,214,139,.16);color:#56d68b;border:1px solid rgba(86,214,139,.4)}
+.conn.off{background:rgba(242,88,62,.16);color:#f2583e;border:1px solid rgba(242,88,62,.4)}
+.conn.connecting{background:rgba(242,139,56,.16);color:var(--orange);border:1px solid rgba(242,139,56,.4)}
+@media(max-width:980px){.workspace{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="top">
+    <div class="brand">
+      <span class="mark">◆</span>
+      <div>
+        <small>STEP MODELER · LIVE VIEWER</small>
+        <h1>对话式 STEP 建模实时预览</h1>
+      </div>
+    </div>
+    <div class="ok" id="status">等待模型</div>
+  </div>
+
+  <div class="workspace">
+    <div class="viewer">
+      <div class="stage" id="stage">
+        <div class="conn off" id="conn">WS: 断开</div>
+        <div class="loading" id="loading">
+          <i></i>
+          <span>正在连接 WebSocket 并等待模型推送…</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <label class="choose">
+          <input type="file" id="step-file" accept=".step,.stp">
+          选择 STEP 文件
+        </label>
+        <button id="rotate" class="active">自动旋转</button>
+        <button id="wire">线框</button>
+        <button id="reset">重置视角</button>
+        <button id="shot">保存截图</button>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <h2>实时预览</h2>
+      <p class="lede">本页面通过 WebSocket 接收来自 step-modeler-mcp 的模型推送。在 Codex 中对话建模后，模型会自动在此刷新。</p>
+
+      <div class="specs">
+        <div class="row"><span>连接状态</span><span id="spec-conn">—</span></div>
+        <div class="row"><span>模型来源</span><span id="spec-source">—</span></div>
+        <div class="row"><span>模型尺寸</span><span id="spec-size">—</span></div>
+        <div class="row"><span>零件数量</span><span id="spec-parts">—</span></div>
+        <div class="row"><span>包围盒</span><span id="spec-bbox">—</span></div>
+      </div>
+
+      <div class="hint">
+        <b>使用方式：</b><br>
+        1. 启动 step-modeler-mcp（自动启动本 WS 服务）<br>
+        2. 在 Codex 对话中建模，例如「创建一个 60×40×10 的板」<br>
+        3. Agent 调用 push_to_viewer 后，本页面自动刷新
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.180.0",
+    "three/addons/": "https://esm.sh/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── Three.js scene setup ──────────────────────────────────────
+const stage = document.getElementById('stage');
+const loading = document.getElementById('loading');
+const statusEl = document.getElementById('status');
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+camera.position.set(80, 60, 120);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+// Lights
+const hemi = new THREE.HemisphereLight(0xddeeff, 0x1a1a2a, 0.55);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 1.8);
+key.position.set(80, 120, 60);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -200;
+key.shadow.camera.right = 200;
+key.shadow.camera.top = 200;
+key.shadow.camera.bottom = -200;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0x88aacc, 0.5);
+fill.position.set(-60, 40, -80);
+scene.add(fill);
+
+// Grid + axes
+const grid = new THREE.GridHelper(400, 40, 0x2a3942, 0x1a2230);
+grid.material.opacity = 0.4;
+grid.material.transparent = true;
+scene.add(grid);
+
+// Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.75;
+controls.enableDamping = true;
+
+// Model container
+let modelRoot = new THREE.Group();
+scene.add(modelRoot);
+
+function clearModel() {
+  modelRoot.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      Array.isArray(o.material) ? o.material.forEach(m => m.dispose()) : o.material.dispose();
+    }
+  });
+  scene.remove(modelRoot);
+  modelRoot = new THREE.Group();
+  scene.add(modelRoot);
+}
+
+function fitView(group) {
+  const box = new THREE.Box3().setFromObject(group);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 50;
+  const dist = maxDim * 2.2;
+  controls.target.copy(center);
+  camera.position.set(center.x + dist*0.5, center.y + dist*0.4, center.z + dist*0.8);
+  controls.update();
+}
+
+// ── OCCT WASM loader (lazy) ────────────────────────────────────
+let occtModule = null;
+
+async function loadOCCT() {
+  if (occtModule) return occtModule;
+  // Load occt-import-js from esm.sh — it bundles the WASM
+  const mod = await import('https://esm.sh/occt-import-js@0.0.23');
+  const occtFactory = mod.default || mod;
+  occtModule = await occtFactory();
+  return occtModule;
+}
+
+async function parseStepBytes(stepBytes) {
+  const occt = await loadOCCT();
+  const result = await occt.ReadStepFile(new Uint8Array(stepBytes), {
+    linearUnit: 'millimeter',
+    linearDeflectionType: 'bounding_box_ratio',
+    linearDeflection: 0.001,
+    angularDeflection: 0.5,
+  });
+  if (!result.success || !result.meshes?.length) {
+    throw new Error('STEP 中没有可显示的实体');
+  }
+  return result.meshes;
+}
+
+function buildThreeFromMeshes(meshes) {
+  const group = new THREE.Group();
+  for (const m of meshes) {
+    const geo = new THREE.BufferGeometry();
+    const pos = m.attributes?.position?.array;
+    if (!pos) continue;
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const nrm = m.attributes?.normal?.array;
+    if (nrm?.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    const idx = m.index?.array;
+    if (idx?.length) geo.setIndex(Array.from(idx));
+    if (!nrm?.length) geo.computeVertexNormals();
+
+    const color = m.color?.length === 3
+      ? new THREE.Color(m.color[0], m.color[1], m.color[2])
+      : new THREE.Color(0x8e9aab);
+    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.28, roughness: 0.46 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = m.name || `part_${group.children.length}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
+}
+
+async function loadStepBytes(bytes, source = 'push') {
+  loading.hidden = false;
+  loading.querySelector('span').textContent = '正在本地解析 STEP，请稍候…';
+  statusEl.textContent = `正在解析 ${source}`;
+  try {
+    const meshes = await parseStepBytes(bytes);
+    clearModel();
+    const group = buildThreeFromMeshes(meshes);
+    modelRoot.add(group);
+    fitView(group);
+
+    // Update specs
+    const box = new THREE.Box3().setFromObject(group);
+    const size = box.getSize(new THREE.Vector3());
+    document.getElementById('spec-source').textContent = source;
+    document.getElementById('spec-size').textContent = `${(bytes.length/1024).toFixed(1)} KB`;
+    document.getElementById('spec-parts').textContent = group.children.length;
+    document.getElementById('spec-bbox').textContent =
+      `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} mm`;
+    statusEl.textContent = `${source} · ${group.children.length} 零件 · 已载入`;
+  } catch (e) {
+    loading.querySelector('span').innerHTML = `<strong>解析失败</strong><br>${String(e.message || e)}`;
+    statusEl.textContent = '解析失败';
+  } finally {
+    loading.hidden = true;
+  }
+}
+
+// ── WebSocket client ───────────────────────────────────────────
+const WS_URL = `ws://127.0.0.1:${location.port ? location.port : 8765}`;
+let ws = null;
+let wsRetryTimer = null;
+
+const connEl = document.getElementById('conn');
+const specConn = document.getElementById('spec-conn');
+
+function setConnState(state, label) {
+  connEl.className = 'conn ' + state;
+  connEl.textContent = label;
+  specConn.textContent = label;
+}
+
+function connectWS() {
+  setConnState('connecting', 'WS: 连接中…');
+  try {
+    ws = new WebSocket(WS_URL);
+  } catch (e) {
+    setConnState('off', 'WS: 不支持');
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    setConnState('on', 'WS: 已连接');
+    if (loading && loading.querySelector('span').textContent.includes('连接 WebSocket')) {
+      loading.querySelector('span').textContent = '已连接，等待模型推送…';
+    }
+  };
+
+  ws.onmessage = async (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === 'hello') return;
+      if (msg.type === 'model_update' && msg.data) {
+        // Decode base64 → bytes
+        const bin = atob(msg.data);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        await loadStepBytes(bytes.buffer, msg.source || 'push');
+      }
+    } catch (e) {
+      console.error('WS message error:', e);
+    }
+  };
+
+  ws.onclose = () => {
+    setConnState('off', 'WS: 断开');
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    setConnState('off', 'WS: 错误');
+  };
+}
+
+function scheduleReconnect() {
+  if (wsRetryTimer) return;
+  wsRetryTimer = setTimeout(() => {
+    wsRetryTimer = null;
+    connectWS();
+  }, 2000);
+}
+
+connectWS();
+
+// ── UI buttons ────────────────────────────────────────────────
+let wireframeOn = false;
+
+document.getElementById('rotate').addEventListener('click', (e) => {
+  controls.autoRotate = !controls.autoRotate;
+  e.target.classList.toggle('active', controls.autoRotate);
+});
+
+document.getElementById('wire').addEventListener('click', (e) => {
+  wireframeOn = !wireframeOn;
+  e.target.classList.toggle('active', wireframeOn);
+  modelRoot.traverse(o => {
+    if (o.isMesh) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => m.wireframe = wireframeOn);
+    }
+  });
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  if (modelRoot.children.length) fitView(modelRoot);
+});
+
+document.getElementById('shot').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  const a = document.createElement('a');
+  a.download = 'STEP_3D视图.png';
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.click();
+});
+
+// Manual file selection (fallback when WS not connected)
+document.getElementById('step-file').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  await loadStepBytes(buf, file.name);
+});
+
+// ── Resize + render loop ──────────────────────────────────────
+function resize() {
+  const w = stage.clientWidth;
+  const h = Math.max(stage.clientHeight, 1);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+function animate() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
