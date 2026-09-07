@@ -1,12 +1,14 @@
-# step-modeler-mcp
+# offline-step-viewer
 
-> 对话式治具与适配板生成器 · MCP 插件 · 实时 3D 预览
+> 通用 STEP 离线 3D 查看器 · 单文件 HTML 双击即用 · 附对话式治具生成 MCP 工具
 
-通过 Codex / Claude / Cursor 等 MCP 客户端**从零生成**机械臂二开场景的简单零件——安装板、法兰、夹爪基座、支架底座——浏览器实时渲染预览。
+**主打：`viewer/offline-step-viewer.html`** —— 单文件网页（约 12MB），内嵌 OCCT-WASM 几何内核 + Three.js 渲染引擎，双击用浏览器打开，拖入任意 `.step` / `.stp` 文件即可浏览。零安装、零联网、模型不出本机，适合快速检查从 GrabCAD / Printables / MakerWorld 等渠道下载的 STEP 模型。
 
-## 定位说明（重要，先读这段）
+仓库另附一套 MCP 工具（包名 `step-modeler-mcp`）：通过 Codex / Claude / Cursor 等 MCP 客户端**从零生成**机械臂二开场景的简单零件——安装板、法兰、夹爪基座、支架底座——浏览器实时渲染预览。
 
-本项目定位是 **parametric part generator（参数化零件生成器）**，**不是** CAD 编辑器。
+## MCP 定位说明（重要，先读这段）
+
+仓库中的 MCP 部分（Python 包 `step-modeler-mcp`）定位是 **parametric part generator（参数化零件生成器）**，**不是** CAD 编辑器。
 
 - ✅ **能做的事**：从零"生成"结构简单的零件——安装板、法兰、夹爪基座、带孔底座等，参数由对话指定，结果导出 STEP
 - ❌ **不能做的事**：导入一个已有 STEP 模型并"修改"它（加孔/改尺寸）。原因：STEP 格式不保留特征历史，无法做参数化编辑；同时本地几何内核（OpenCASCADE）不具备商业 CAD 的特征树能力
@@ -16,15 +18,21 @@
 
 ## 特性
 
-- 🛠️ **14 个建模工具**：基本体、布尔运算、治具场景模板（安装孔/法兰/轴承座/夹爪基座）
-- 🔄 **实时预览**：服务端三角化后 WebSocket 推送 mesh，浏览器自动刷新
 - 📂 **离线 STEP 查看器**：`viewer/offline-step-viewer.html` 单文件 HTML，双击即用，无需安装任何环境
-- 🔒 **本地运行**：模型不上传任何服务器
+- 🛠️ **14 个建模工具**（MCP）：基本体、布尔运算、治具场景模板（安装孔/法兰/轴承座/夹爪基座）
+- 🔄 **实时预览**（MCP）：服务端三角化后 WebSocket 推送 mesh，浏览器自动刷新
+- 🔒 **本地运行**：模型不上传任何服务器（查看器与 MCP 均适用）
 - 🤖 **面向机械臂二开**：内置公制安装孔（M3–M20）、双爪基座等常用零件模板
 
 ## 快速开始
 
-### 1. 安装
+### 方式一：离线查看器（推荐，零门槛）
+
+下载 [`viewer/offline-step-viewer.html`](viewer/offline-step-viewer.html)（约 12MB，Git Clone 或在 GitHub 页面直接下载该文件），**双击用浏览器打开**，拖入或"打开文件"选择任意 `.step` / `.stp` 即可浏览。完全离线运行，不需要 Python、不需要启动任何服务。
+
+### 方式二：MCP 治具生成器
+
+#### 1. 安装
 
 ```bash
 # 需要 Python ≥ 3.10
@@ -37,7 +45,7 @@ pip install step-modeler-mcp
 uvx step-modeler-mcp
 ```
 
-### 2. 配置 MCP 客户端
+#### 2. 配置 MCP 客户端
 
 #### Codex
 
@@ -75,20 +83,11 @@ uvx step-modeler-mcp
 }
 ```
 
-### 3. 启动 Viewer
+#### 3. 启动实时预览
 
-`viewer/` 目录下有两个查看器，按需选用：
+启动 MCP server 后（它会自动开 WebSocket 服务），浏览器打开 `viewer/index.html`，显示"WS: 已连接"即就绪。
 
-| 文件 | 用途 | 依赖 |
-|---|---|---|
-| `viewer/index.html` | 实时预览 MCP 生成的模型（WebSocket 接收 mesh 推送） | 需先启动 MCP server |
-| `viewer/offline-step-viewer.html` | 打开**任意已有 STEP 文件**查看（OCCT-WASM 浏览器端解析） | 无，双击即用 |
-
-**实时预览**：启动 MCP server 后（它会自动开 WebSocket 服务），浏览器打开 `viewer/index.html`，显示"WS: 已连接"即就绪。
-
-**离线查看**：直接双击 `viewer/offline-step-viewer.html`，拖入或打开任意 `.step` / `.stp` 文件即可浏览，完全离线运行，适合快速检查从 GrabCAD / Printables 等渠道下载的 STEP 模型。
-
-### 4. 开始对话
+#### 4. 开始对话
 
 在 Codex 中输入：
 
@@ -179,16 +178,17 @@ Agent:
 
 ## 技术栈
 
-- **建模引擎**：[build123d](https://github.com/gumyr/build123d) — OpenCASCADE 之上的声明式 Python CAD
+- **离线查看器**：OCCT-WASM（occt-import-js）浏览器端 STEP 解析 + Three.js WebGL 渲染，单文件自包含
+- **建模引擎**（MCP）：[build123d](https://github.com/gumyr/build123d) — OpenCASCADE 之上的声明式 Python CAD
 - **MCP 协议**：[mcp](https://pypi.org/project/mcp/)（v2.x, MCPServer）
-- **实时通信**：[websockets](https://websockets.readthedocs.io/)
-- **Viewer**：[Three.js](https://threejs.org/) — WebGL 渲染，服务端三角化推送
+- **实时通信**（MCP）：[websockets](https://websockets.readthedocs.io/)
+- **实时预览 Viewer**：Three.js — WebGL 渲染，服务端三角化推送
 
 ## 开发
 
 ```bash
-git clone https://github.com/yourname/step-modeler-mcp.git
-cd step-modeler-mcp
+git clone https://github.com/dsh18235538266-crypto/offline-step-viewer.git
+cd offline-step-viewer
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .
@@ -198,7 +198,7 @@ step-modeler-mcp
 ### 项目结构
 
 ```
-step-modeler-mcp/
+offline-step-viewer/
 ├── src/step_modeler/
 │   ├── __init__.py
 │   ├── server.py        # MCP server 入口 + 工具注册
