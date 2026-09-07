@@ -18,6 +18,7 @@
 
 - 🛠️ **14 个建模工具**：基本体、布尔运算、治具场景模板（安装孔/法兰/轴承座/夹爪基座）
 - 🔄 **实时预览**：服务端三角化后 WebSocket 推送 mesh，浏览器自动刷新
+- 📂 **离线 STEP 查看器**：`viewer/offline-step-viewer.html` 单文件 HTML，双击即用，无需安装任何环境
 - 🔒 **本地运行**：模型不上传任何服务器
 - 🤖 **面向机械臂二开**：内置公制安装孔（M3–M20）、双爪基座等常用零件模板
 
@@ -76,13 +77,16 @@ uvx step-modeler-mcp
 
 ### 3. 启动 Viewer
 
-启动 MCP server 后（它会自动开 WebSocket 服务），浏览器打开：
+`viewer/` 目录下有两个查看器，按需选用：
 
-```
-viewer/index.html
-```
+| 文件 | 用途 | 依赖 |
+|---|---|---|
+| `viewer/index.html` | 实时预览 MCP 生成的模型（WebSocket 接收 mesh 推送） | 需先启动 MCP server |
+| `viewer/offline-step-viewer.html` | 打开**任意已有 STEP 文件**查看（OCCT-WASM 浏览器端解析） | 无，双击即用 |
 
-显示"WS: 已连接"即就绪。
+**实时预览**：启动 MCP server 后（它会自动开 WebSocket 服务），浏览器打开 `viewer/index.html`，显示"WS: 已连接"即就绪。
+
+**离线查看**：直接双击 `viewer/offline-step-viewer.html`，拖入或打开任意 `.step` / `.stp` 文件即可浏览，完全离线运行，适合快速检查从 GrabCAD / Printables 等渠道下载的 STEP 模型。
 
 ### 4. 开始对话
 
@@ -203,7 +207,8 @@ step-modeler-mcp/
 │   ├── state.py         # 模型状态管理 + 历史栈
 │   └── viewer_ws.py     # WebSocket 服务（mesh 推送）
 ├── viewer/
-│   └── index.html       # 实时预览 HTML
+│   ├── index.html               # 实时预览 HTML（WebSocket）
+│   └── offline-step-viewer.html # 独立离线 STEP 查看器（单文件，双击即用）
 ├── tests/
 │   └── test_e2e.py      # 端到端测试
 ├── pyproject.toml
