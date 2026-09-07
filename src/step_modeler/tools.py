@@ -1,4 +1,4 @@
-"""Atomic MCP tools for STEP model creation/editing.
+"""Atomic MCP tools for parametric part generation (fixtures/adapters).
 
 Each tool operates on the in-memory ModelState singleton.
 Tools are async and use build123d for geometry.
@@ -27,7 +27,7 @@ from build123d import (
 )
 
 from .state import get_state
-from .viewer_ws import push_model
+from .viewer_ws import push_model, push_mesh
 
 logger = logging.getLogger("step_modeler.tools")
 
@@ -256,9 +256,9 @@ async def export_step(path: Optional[str] = None) -> dict:
 
 
 async def push_to_viewer(source: str = "manual") -> dict:
-    """Export the current model as STEP and push it to the HTML viewer.
+    """Tessellate the current model and push the mesh to the HTML viewer.
 
-    The viewer (if connected) will automatically reload the model.
+    The viewer (if connected) will automatically render the mesh.
     This is the tool to call after any modeling operation so the user
     can see the result in real time.
 
@@ -272,14 +272,62 @@ async def push_to_viewer(source: str = "manual") -> dict:
     if state.is_empty():
         raise ValueError("No model to push.")
 
-    step_bytes = state.export_step_bytes()
-    await push_model(step_bytes, source=source)
+    # Tessellate the current shape into vertices + triangle indices
+    shape = state.current
+    # build123d Shape.tessellate(tolerance, angular_tolerance)
+    # returns (list[Vector], list[(i,j,k)])
+    try:
+        verts, faces = shape.tessellate(0.1, 0.5)
+    except Exception:
+        # For Compound, try getting top-level solids
+        from build123d import Compound
+        if isinstance(shape, Compound):
+            solids = shape.get_top_level_shapes()
+            all_verts = []
+            all_faces = []
+            meshes = []
+            for solid in solids:
+                v, f = solid.tessellate(0.1, 0.5)
+                offset = len(all_verts)
+                mesh_verts = []
+                for vec in v:
+                    all_verts.append(vec)
+                    mesh_verts.extend([vec.X, vec.Y, vec.Z])
+                mesh_indices = []
+                for (a, b, c) in f:
+                    all_faces.append((a + offset, b + offset, c + offset))
+                    mesh_indices.extend([a + offset, b + offset, c + offset])
+                meshes.append({"vertices": mesh_verts, "indices": mesh_indices})
+            n_viewers = await push_mesh(meshes, source=source)
+            return {
+                "action": "push_to_viewer",
+                "source": source,
+                "mesh_count": len(meshes),
+                "total_vertices": len(all_verts),
+                "total_triangles": len(all_faces),
+                "viewers_connected": n_viewers,
+                "info": state.info(),
+            }
+        raise
+
+    # Single shape: build one mesh
+    mesh_verts = []
+    for vec in verts:
+        mesh_verts.extend([vec.X, vec.Y, vec.Z])
+    mesh_indices = []
+    for (a, b, c) in faces:
+        mesh_indices.extend([a, b, c])
+
+    meshes = [{"vertices": mesh_verts, "indices": mesh_indices}]
+    n_viewers = await push_mesh(meshes, source=source)
 
     return {
         "action": "push_to_viewer",
         "source": source,
-        "size": len(step_bytes),
-        "viewers_connected": len(__import__("step_modeler.viewer_ws", fromlist=["_clients"])._clients),
+        "mesh_count": 1,
+        "total_vertices": len(verts),
+        "total_triangles": len(faces),
+        "viewers_connected": n_viewers,
         "info": state.info(),
     }
 

@@ -15,3 +15,7 @@ venv/
 .idea/
 .vscode/
 *.log
+
+# Local dev/debug scripts (not shipped)
+run.py
+serve_*.py

@@ -76,7 +76,46 @@ async def push_model(step_bytes: bytes, source: str = "tool") -> None:
     for ws in disconnected:
         _clients.discard(ws)
 
-    logger.info("Pushed model (%d bytes) to %d viewer(s)", len(step_bytes), len(_clients))
+    logger.info("Pushed STEP model (%d bytes) to %d viewer(s)", len(step_bytes), len(_clients))
+
+
+async def push_mesh(meshes: list, source: str = "tool") -> int:
+    """Push tessellated mesh data to all connected viewers.
+
+    Args:
+        meshes: List of dicts with 'vertices' (flat list of floats),
+                'indices' (flat list of ints), optional 'color' ([r,g,b] 0-1).
+        source: Human-readable label.
+
+    Returns:
+        Number of viewers that received the push.
+    """
+    if not _clients:
+        logger.info("No viewers connected; mesh not pushed.")
+        return 0
+
+    payload = {
+        "type": "mesh_update",
+        "source": source,
+        "mesh_count": len(meshes),
+        "meshes": meshes,
+    }
+    msg = json.dumps(payload)
+
+    disconnected = []
+    sent = 0
+    for ws in _clients:
+        try:
+            await ws.send(msg)
+            sent += 1
+        except websockets.ConnectionClosed:
+            disconnected.append(ws)
+
+    for ws in disconnected:
+        _clients.discard(ws)
+
+    logger.info("Pushed mesh (%d parts) to %d viewer(s)", len(meshes), sent)
+    return sent
 
 
 async def start_server(port: int = 8765) -> None:

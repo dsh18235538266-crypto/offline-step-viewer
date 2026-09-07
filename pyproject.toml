@@ -1,7 +1,7 @@
 [project]
 name = "step-modeler-mcp"
 version = "0.1.0"
-description = "MCP plugin for conversational STEP model creation/editing with real-time HTML viewer"
+description = "Conversational fixture/adapter-plate generator via MCP with real-time 3D viewer. From-scratch parametric parts, not a STEP editor."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
